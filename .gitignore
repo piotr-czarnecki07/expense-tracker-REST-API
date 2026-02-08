@@ -1,0 +1,7 @@
+# enviroment files
+venv/
+.env
+
+# auto-generated files
+expenseAPI/db.sqlite3
+**/__pycache__/**
