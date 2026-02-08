@@ -10,4 +10,4 @@ class User(models.Model):
 
     token = models.CharField(max_length=50) # a token that allows to perform operations on user's expenses list, hashed in the database
 
-    createdAt = models.DateField(auto_now_add=True)
+    created_at = models.DateField(auto_now_add=True)
