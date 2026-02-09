@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from DB.models import User
 from Views.serializers import UserSerializer
 
-from Views.hash import hash_table, dehash_table, CHARACTERS
+from Views.hash import hash_table, CHARACTERS
 import random
 
 def hash_text(text: str) -> str:
@@ -16,12 +16,6 @@ def hash_text(text: str) -> str:
     for c in text:
         hashed += hash_table[c]
     return hashed
-
-def dehash_text(text: str) -> str:
-    dehashed = ''
-    for c in text:
-        dehashed += dehash_table[c]
-    return dehashed
 
 @api_view(['GET', 'POST'])
 def all_users(request):
@@ -74,13 +68,39 @@ def all_users(request):
             return Response(serializer.data, st.HTTP_201_CREATED)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-def specific_user(request, user: int):
-    pass
+def specific_user(request, user: str):
+    # find user
+    user_obj = User.objects.filter(username=user).first()
+    if user_obj is None:
+        return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
+
+    # validate token
+    try:
+        token = request.data['key']
+
+    except KeyError as e:
+        return Response({'error': f'User token was not provided'}, st.HTTP_400_BAD_REQUEST)
+
+    if user_obj.token != hash_text(token):
+        return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+
+    # perform operations
+    if request.method == 'GET':
+        pass
+
+    elif request.method == 'PUT':
+        pass
+
+    elif request.method == 'PATCH':
+        pass
+
+    else: # DELETE
+        pass
 
 @api_view(['GET', 'POST'])
-def all_expenses(request, user: int):
+def all_expenses(request, user: str):
     pass
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-def specific_expense(request, user: int, expense: int):
+def specific_expense(request, user: str, expense: int):
     pass
