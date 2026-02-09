@@ -17,6 +17,10 @@ def hash_text(text: str) -> str:
         hashed += hash_table[c]
     return hashed
 
+def db_error(e): # function for less verbose syntax
+    return Response({'error': f'Database is not available: {e}'}, st.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET', 'POST'])
 def all_users(request):
     if request.method == 'GET': # return a list of all users
@@ -24,8 +28,8 @@ def all_users(request):
             users = User.objects.all() # Queryset of all users
             serializer = UserSerializer(users, many=True)
 
-        except DatabaseError as e:
-            return Response({'error': f'Database is not available: {e}'}, st.HTTP_500_INTERNAL_SERVER_ERROR)
+        except DatabaseError as db_e:
+            return db_error(db_e)
 
         else:
             return Response(serializer.data, st.HTTP_200_OK)
@@ -36,8 +40,8 @@ def all_users(request):
             email = request.data['email']
             password = request.data['password']
 
-        except KeyError as e:
-            return Response({'error': f'Parameter {e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+        except KeyError as key_e:
+            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
 
         # parameters validation
         if User.objects.filter(username=username).first() is not None:
@@ -57,11 +61,11 @@ def all_users(request):
             user = User(username=username, email=email, password=hash_text(password), token=hash_text(token))
             user.save()
 
-        except ValidationError as e:
-            return Response({'error': f'User data is invalid, {e}'}, st.HTTP_400_BAD_REQUEST)
+        except ValidationError as val_e:
+            return Response({'error': f'User data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
         
-        except DatabaseError as e:
-            return Response({'error': f'Database is not available: {e}'}, st.HTTP_500_INTERNAL_SERVER_ERROR)
+        except DatabaseError as db_e:
+            return db_error(db_e)
         
         else:
             serializer = UserSerializer(user)
@@ -70,9 +74,13 @@ def all_users(request):
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def specific_user(request, user: str):
     # find user
-    user_obj = User.objects.filter(username=user).first()
-    if user_obj is None:
-        return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
+    try:
+        user_obj = User.objects.filter(username=user).first()
+        if user_obj is None:
+            return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
+        
+    except DatabaseError as db_e:
+        return db_error(db_e)
 
     # validate token
     try:
@@ -86,7 +94,8 @@ def specific_user(request, user: str):
 
     # perform operations
     if request.method == 'GET':
-        pass
+        serializer = UserSerializer(user)
+        return Response(serializer.data, st.HTTP_200_OK)
 
     elif request.method == 'PUT':
         pass
