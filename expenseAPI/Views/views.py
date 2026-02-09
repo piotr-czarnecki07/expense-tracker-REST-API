@@ -55,11 +55,14 @@ def all_users(request):
 
         token = ''
         for _ in range(50):
-            token += CHARACTERS[random.randint(0, 43)]
+            token += CHARACTERS[random.randint(0, 38)]
 
         try:
             user = User(username=username, email=email, password=hash_text(password), token=hash_text(token))
             user.save()
+
+        except KeyError:
+            return Response({'error': 'Password must contain ONLY the following characters: a-z  0-9  !@#$^&*  _-'}, st.HTTP_400_BAD_REQUEST)
 
         except ValidationError as val_e:
             return Response({'error': f'User data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
@@ -68,8 +71,7 @@ def all_users(request):
             return db_error(db_e)
         
         else:
-            serializer = UserSerializer(user)
-            return Response(serializer.data, st.HTTP_201_CREATED)
+            return Response({'token': token}, st.HTTP_201_CREATED)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def specific_user(request, user: str):
@@ -84,17 +86,20 @@ def specific_user(request, user: str):
 
     # validate token
     try:
-        token = request.data['key']
+        token = request.data['token']
 
-    except KeyError as e:
-        return Response({'error': f'User token was not provided'}, st.HTTP_400_BAD_REQUEST)
+    except KeyError as key_e:
+        token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters
+                                                  # otherwise it can be placed within request body
+        if token is None:
+            return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
 
     if user_obj.token != hash_text(token):
         return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
 
     # perform operations
     if request.method == 'GET':
-        serializer = UserSerializer(user)
+        serializer = UserSerializer(user_obj)
         return Response(serializer.data, st.HTTP_200_OK)
 
     elif request.method == 'PUT':
