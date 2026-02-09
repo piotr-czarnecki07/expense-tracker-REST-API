@@ -105,7 +105,7 @@ def specific_user(request, user: str):
 
         except KeyError as key_e:
             return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
-        
+
         try:
             user_obj.username = username
             user_obj.email= email
@@ -114,13 +114,40 @@ def specific_user(request, user: str):
 
         except ValidationError as val_e:
             return Response({'error': f'User data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
-        
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+
         else:
             serializer = UserSerializer(user_obj)
             return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     elif request.method == 'PATCH':
-        pass
+        username = request.data.get('username')
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        try:
+            if username is not None:
+                user_obj.username = username
+
+            if email is not None:
+                user_obj.email = email
+
+            if password is not None:
+                user_obj.password = hash_text(password)
+
+            user_obj.save()
+
+        except ValidationError as val_e:
+            return Response({'error': f'User data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+
+        else:
+            serializer = UserSerializer(user_obj)
+            return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     else: # DELETE
         pass
