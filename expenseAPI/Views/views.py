@@ -150,7 +150,15 @@ def specific_user(request, user: str):
             return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     else: # DELETE
-        pass
+        try:
+            serializer = UserSerializer(user_obj)
+            user_obj.delete()
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+
+        else:
+            return Response(serializer.data, st.HTTP_204_NO_CONTENT)
 
 @api_view(['GET', 'POST'])
 def all_expenses(request, user: str):
