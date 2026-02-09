@@ -98,7 +98,26 @@ def specific_user(request, user: str):
         return Response(serializer.data, st.HTTP_200_OK)
 
     elif request.method == 'PUT':
-        pass
+        try:
+            username = request.data['username']
+            email = request.data['email']
+            password = request.data['password']
+
+        except KeyError as key_e:
+            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user_obj.username = username
+            user_obj.email= email
+            user_obj.password = hash_text(password)
+            user_obj.save()
+
+        except ValidationError as val_e:
+            return Response({'error': f'User data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
+        
+        else:
+            serializer = UserSerializer(user_obj)
+            return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     elif request.method == 'PATCH':
         pass
