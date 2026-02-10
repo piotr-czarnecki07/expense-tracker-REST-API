@@ -9,6 +9,8 @@ from DB.models import User, Expense
 from Views.serializers import UserSerializer, UserBulkSerializer, ExpenseSerializer, ExpenseBulkSerializer
 
 from Views.hash import hash_table, CHARACTERS
+
+from functools import wraps
 import random
 
 def hash_text(text: str) -> str:
@@ -17,8 +19,33 @@ def hash_text(text: str) -> str:
         hashed += hash_table[c]
     return hashed
 
-def db_error(e): # function for less verbose syntax
+# syntactic sugar functions
+def db_error(e):
     return Response({'error': f'Database is not available: {e}'}, st.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def key_error(e):
+    return Response({'error': f'Parameter {e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+
+def amount_type_error(e):
+    return Response({'error': f"Parameter 'amount' is of wrong type: {e}"}, st.HTTP_400_BAD_REQUEST)
+
+# decorators
+def find_user(view):
+    @wraps(view)
+    def wrapper(request, user: str):
+        try:
+            user_obj = User.objects.filter(username=user).first()
+            if user_obj is None:
+                return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+        
+        request.user_obj = user_obj
+
+        return view(request, user)
+    
+    return wrapper
 
 
 @api_view(['GET', 'POST'])
@@ -30,6 +57,9 @@ def all_users(request):
 
         except DatabaseError as db_e:
             return db_error(db_e)
+        
+        except AttributeError as atr_e:
+            return Response({'error': f"Data of this user had been deleted"}, st.HTTP_410_GONE)
 
         else:
             return Response(serializer.data, st.HTTP_200_OK)
@@ -41,7 +71,7 @@ def all_users(request):
             password = request.data['password']
 
         except KeyError as key_e:
-            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+            return key_error(key_e)
 
         # parameters validation
         if User.objects.filter(username=username).first() is not None:
@@ -74,16 +104,8 @@ def all_users(request):
             return Response({'token': token}, st.HTTP_201_CREATED)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@find_user
 def specific_user(request, user: str):
-    # find user
-    try:
-        user_obj = User.objects.filter(username=user).first()
-        if user_obj is None:
-            return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
-        
-    except DatabaseError as db_e:
-        return db_error(db_e)
-
     # validate token
     try:
         token = request.data['token']
@@ -94,12 +116,12 @@ def specific_user(request, user: str):
         if token is None:
             return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
 
-    if user_obj.token != hash_text(token):
+    if request.user_obj.token != hash_text(token):
         return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
 
     # perform operations
     if request.method == 'GET':
-        serializer = UserSerializer(user_obj)
+        serializer = UserSerializer(request.user_obj)
         return Response(serializer.data, st.HTTP_200_OK)
 
     elif request.method == 'PUT':
@@ -109,13 +131,13 @@ def specific_user(request, user: str):
             password = request.data['password']
 
         except KeyError as key_e:
-            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+            return key_error(key_e)
 
         try:
-            user_obj.username = username
-            user_obj.email= email
-            user_obj.password = hash_text(password)
-            user_obj.save()
+            request.user_obj.username = username
+            request.user_obj.email= email
+            request.user_obj.password = hash_text(password)
+            request.user_obj.save()
 
         except ValidationError as val_e:
             return Response({'error': f'User data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
@@ -124,7 +146,7 @@ def specific_user(request, user: str):
             return db_error(db_e)
 
         else:
-            serializer = UserSerializer(user_obj)
+            serializer = UserSerializer(request.user_obj)
             return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     elif request.method == 'PATCH':
@@ -134,15 +156,15 @@ def specific_user(request, user: str):
 
         try:
             if username is not None:
-                user_obj.username = username
+                request.user_obj.username = username
 
             if email is not None:
-                user_obj.email = email
+                request.user_obj.email = email
 
             if password is not None:
-                user_obj.password = hash_text(password)
+                request.user_obj.password = hash_text(password)
 
-            user_obj.save()
+            request.user_obj.save()
 
         except ValidationError as val_e:
             return Response({'error': f'User data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
@@ -151,13 +173,13 @@ def specific_user(request, user: str):
             return db_error(db_e)
 
         else:
-            serializer = UserSerializer(user_obj)
+            serializer = UserSerializer(request.user_obj)
             return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     else: # DELETE
         try:
-            serializer = UserSerializer(user_obj)
-            user_obj.delete()
+            serializer = UserSerializer(request.user_obj)
+            request.user_obj.delete()
 
         except DatabaseError as db_e:
             return db_error(db_e)
@@ -166,16 +188,8 @@ def specific_user(request, user: str):
             return Response(serializer.data, st.HTTP_204_NO_CONTENT)
 
 @api_view(['GET', 'POST'])
+@find_user
 def all_expenses(request, user: str):
-    # find user
-    try:
-        user_obj = User.objects.filter(username=user).first()
-        if user_obj is None:
-            return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
-
-    except DatabaseError as db_e:
-        return db_error(db_e)
-
     # validate token
     try:
         token = request.data['token']
@@ -186,19 +200,22 @@ def all_expenses(request, user: str):
         if token is None:
             return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
 
-    if user_obj.token != hash_text(token):
+    if request.user_obj.token != hash_text(token):
         return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
 
     # perform operations
     if request.method == 'GET':
         try:
-            expenses = [Expense.objects.filter(id=expense_id).first() for expense_id in user_obj.expense_ids]
+            expenses = [Expense.objects.filter(id=expense_id).first() for expense_id in request.user_obj.expense_ids]
+            serializer = ExpenseBulkSerializer(expenses, many=True)
 
         except DatabaseError as db_e:
             return db_error(db_e)
+        
+        except AttributeError as atr_e:
+            return Response({'error': f"Data of this expense had been deleted"}, st.HTTP_410_GONE)
 
         else:
-            serializer = ExpenseBulkSerializer(expenses, many=True)
             return Response(serializer.data, st.HTTP_200_OK)
 
     else: # POST; adds a new expense
@@ -210,14 +227,14 @@ def all_expenses(request, user: str):
             expense = Expense(title=title, amount=amount, category=category)
             expense.save()
 
-            user_obj.expense_ids.append(expense.id)
-            user_obj.save()
+            request.user_obj.expense_ids.append(expense.id)
+            request.user_obj.save()
 
         except (KeyError, TypeError) as key_e: # TypeError means that amount parameter was not provided
-            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+            return key_error(key_e)
 
         except ValueError as v_e:
-            return Response({'error': f"Parameter 'amount' is of wrong type: {v_e}"}, st.HTTP_400_BAD_REQUEST)
+            return amount_type_error(v_e)
 
         except ValidationError as val_e:
             return Response({'error': f'Expense data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
@@ -230,16 +247,8 @@ def all_expenses(request, user: str):
             return Response(serializer.data, st.HTTP_201_CREATED)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@find_user
 def specific_expense(request, user: str, expense: int):
-    # find user
-    try:
-        user_obj = User.objects.filter(username=user).first()
-        if user_obj is None:
-            return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
-
-    except DatabaseError as db_e:
-        return db_error(db_e)
-
     # validate token
     try:
         token = request.data['token']
@@ -250,7 +259,7 @@ def specific_expense(request, user: str, expense: int):
         if token is None:
             return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
 
-    if user_obj.token != hash_text(token):
+    if request.user_obj.token != hash_text(token):
         return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
 
     try:    
@@ -273,10 +282,10 @@ def specific_expense(request, user: str, expense: int):
             expense_obj.save()
 
         except (KeyError, TypeError) as key_e: # TypeError means that amount parameter was not provided
-            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+            return key_error(key_e)
 
         except ValueError as v_e:
-            return Response({'error': f"Parameter 'amount' is of wrong type: {v_e}"}, st.HTTP_400_BAD_REQUEST)
+            return amount_type_error(v_e)
 
         except ValidationError as val_e:
             return Response({'error': f'Expense data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
@@ -306,7 +315,7 @@ def specific_expense(request, user: str, expense: int):
             expense_obj.save()
 
         except ValueError as v_e:
-            return Response({'error': f"Parameter 'amount' is of wrong type: {v_e}"}, st.HTTP_400_BAD_REQUEST)
+            return amount_type_error(v_e)
 
         except ValidationError as val_e:
             return Response({'error': f'Expense data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
@@ -320,8 +329,13 @@ def specific_expense(request, user: str, expense: int):
 
     else: # DELETE
         try:
+            id_to_remove = expense_obj.id
+
             serializer = ExpenseSerializer(expense_obj)
             expense_obj.delete()
+
+            request.user_obj.expense_ids.remove(id_to_remove)
+            request.user_obj.save()
 
         except DatabaseError as db_e:
             return db_error(db_e)
