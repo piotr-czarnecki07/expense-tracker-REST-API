@@ -213,7 +213,7 @@ def all_expenses(request, user: str):
             user_obj.expense_ids.append(expense.id)
             user_obj.save()
 
-        except KeyError as key_e:
+        except (KeyError, TypeError) as key_e: # TypeError means that amount parameter was not provided
             return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
 
         except ValueError as v_e:
@@ -272,7 +272,7 @@ def specific_expense(request, user: str, expense: int):
             expense_obj.category = request.data['category']
             expense_obj.save()
 
-        except KeyError as key_e:
+        except (KeyError, TypeError) as key_e: # TypeError means that amount parameter was not provided
             return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
 
         except ValueError as v_e:
@@ -291,14 +291,14 @@ def specific_expense(request, user: str, expense: int):
     elif request.method == 'PATCH':
         try:
             title = request.data.get('title')
-            amount = float(request.data.get('amount'))
+            amount = request.data.get('amount')
             category = request.data.get('category')
 
             if title is not None:
                 expense_obj.title = title
 
             if amount is not None:
-                expense_obj.amount = amount
+                expense_obj.amount = float(amount)
 
             if category is not None:
                 expense_obj.category = category
