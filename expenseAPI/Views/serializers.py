@@ -14,4 +14,4 @@ class ExpenseSerializer(ModelSerializer):
 class ExpenseBulkSerializer(ModelSerializer):
     class Meta:
         model = Expense
-        fields = 'title'
+        fields = ['title', 'amount']

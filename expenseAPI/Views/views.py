@@ -172,7 +172,7 @@ def all_expenses(request, user: str):
         user_obj = User.objects.filter(username=user).first()
         if user_obj is None:
             return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
-        
+
     except DatabaseError as db_e:
         return db_error(db_e)
 
@@ -181,14 +181,14 @@ def all_expenses(request, user: str):
         token = request.data['token']
 
     except KeyError as key_e:
-        token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters
-                                                  # otherwise it can be placed within request body
+        token = request.query_params.get('token') # for GET method token must be provided within query params
+
         if token is None:
             return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
 
     if user_obj.token != hash_text(token):
         return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
-    
+
     # perform operations
     if request.method == 'GET':
         try:
@@ -196,14 +196,38 @@ def all_expenses(request, user: str):
 
         except DatabaseError as db_e:
             return db_error(db_e)
-        
+
         else:
             serializer = ExpenseBulkSerializer(expenses, many=True)
             return Response(serializer.data, st.HTTP_200_OK)
-        
-    else:
-        pass
 
+    else: # POST; adds a new expense
+        try:
+            title = request.data['title']
+            amount = float(request.data['amount'])
+            category = request.data['category']
+
+            expense = Expense(title=title, amount=amount, category=category)
+            expense.save()
+
+            user_obj.expenses.append(expense.id)
+            user_obj.save()
+
+        except KeyError as key_e:
+            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+
+        except ValueError as v_e:
+            return Response({'error': f'Parameter amount is of wrong type: {v_e}'}, st.HTTP_400_BAD_REQUEST)
+
+        except ValidationError as val_e:
+            return Response({'error': f'Expense data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+
+        else:
+            serializer = ExpenseSerializer(expense)
+            return Response(serializer.data, st.HTTP_201_CREATED)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def specific_expense(request, user: str, expense: int):
