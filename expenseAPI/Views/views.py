@@ -231,4 +231,45 @@ def all_expenses(request, user: str):
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def specific_expense(request, user: str, expense: int):
-    pass
+    # find user
+    try:
+        user_obj = User.objects.filter(username=user).first()
+        if user_obj is None:
+            return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
+
+    except DatabaseError as db_e:
+        return db_error(db_e)
+
+    # validate token
+    try:
+        token = request.data['token']
+
+    except KeyError as key_e:
+        token = request.query_params.get('token') # for GET method token must be provided within query params
+
+        if token is None:
+            return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
+
+    if user_obj.token != hash_text(token):
+        return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+
+    try:    
+        expense_obj = Expense.objects.filter(id=expense).first()
+        if expense_obj is None:
+            return Response({'error': f"Expense with an id '{expense}' was not found"}, st.HTTP_404_NOT_FOUND)
+
+    except DatabaseError as db_e:
+        return db_error(db_e)
+
+    if request.method == 'GET':
+        serializer = ExpenseSerializer(expense_obj)
+        return Response(serializer.data, st.HTTP_200_OK)
+
+    elif request.method == 'PUT':
+        pass
+
+    elif request.method == 'PATCH':
+        pass
+
+    else: # DELETE
+        pass
