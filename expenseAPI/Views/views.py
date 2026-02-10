@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError
 
 from DB.models import User, Expense
-from Views.serializers import UserSerializer, ExpenseSerializer, ExpenseBulkSerializer
+from Views.serializers import UserSerializer, UserBulkSerializer, ExpenseSerializer, ExpenseBulkSerializer
 
 from Views.hash import hash_table, CHARACTERS
 import random
@@ -26,7 +26,7 @@ def all_users(request):
     if request.method == 'GET': # return a list of all users
         try:
             users = User.objects.all() # Queryset of all users
-            serializer = UserSerializer(users, many=True)
+            serializer = UserBulkSerializer(users, many=True)
 
         except DatabaseError as db_e:
             return db_error(db_e)
@@ -192,7 +192,7 @@ def all_expenses(request, user: str):
     # perform operations
     if request.method == 'GET':
         try:
-            expenses = Expense.objects.all()
+            expenses = [Expense.objects.filter(id=expense_id).first() for expense_id in user_obj.expense_ids]
 
         except DatabaseError as db_e:
             return db_error(db_e)
@@ -210,14 +210,14 @@ def all_expenses(request, user: str):
             expense = Expense(title=title, amount=amount, category=category)
             expense.save()
 
-            user_obj.expenses.append(expense.id)
+            user_obj.expense_ids.append(expense.id)
             user_obj.save()
 
         except KeyError as key_e:
             return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
 
         except ValueError as v_e:
-            return Response({'error': f'Parameter amount is of wrong type: {v_e}'}, st.HTTP_400_BAD_REQUEST)
+            return Response({'error': f"Parameter 'amount' is of wrong type: {v_e}"}, st.HTTP_400_BAD_REQUEST)
 
         except ValidationError as val_e:
             return Response({'error': f'Expense data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
