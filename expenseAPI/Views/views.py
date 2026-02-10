@@ -32,19 +32,37 @@ def amount_type_error(e):
 # decorators
 def find_user(view):
     @wraps(view)
-    def wrapper(request, user: str):
+    def wrapper(request, *args):
         try:
-            user_obj = User.objects.filter(username=user).first()
+            user_obj = User.objects.filter(username=args[0]).first()
             if user_obj is None:
-                return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
+                return Response({'error': f"Username '{args[0]}' not found"}, st.HTTP_404_NOT_FOUND)
 
         except DatabaseError as db_e:
             return db_error(db_e)
-        
+
         request.user_obj = user_obj
 
-        return view(request, user)
-    
+        return view(request, *args)
+
+    return wrapper
+
+def validate_token(view):
+    @wraps(view)
+    def wrapper(request, *args):
+        try:
+            token = request.data['token']
+
+        except KeyError:
+            token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters
+                                                      # otherwise it can be placed within request body
+            if token is None:
+                return Response({'error': 'User token was not provided'}, st.HTTP_400_BAD_REQUEST)
+
+        request.token = token
+
+        return view(request, *args)
+
     return wrapper
 
 
@@ -105,19 +123,11 @@ def all_users(request):
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @find_user
+@validate_token
 def specific_user(request, user: str):
     # validate token
-    try:
-        token = request.data['token']
-
-    except KeyError as key_e:
-        token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters
-                                                  # otherwise it can be placed within request body
-        if token is None:
-            return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
-
-    if request.user_obj.token != hash_text(token):
-        return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+    if request.user_obj.token != hash_text(request.token):
+        return Response({'error': f"Token '{request.token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
 
     # perform operations
     if request.method == 'GET':
@@ -189,19 +199,11 @@ def specific_user(request, user: str):
 
 @api_view(['GET', 'POST'])
 @find_user
+@validate_token
 def all_expenses(request, user: str):
     # validate token
-    try:
-        token = request.data['token']
-
-    except KeyError as key_e:
-        token = request.query_params.get('token') # for GET method token must be provided within query params
-
-        if token is None:
-            return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
-
-    if request.user_obj.token != hash_text(token):
-        return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+    if request.user_obj.token != hash_text(request.token):
+        return Response({'error': f"Token '{request.token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
 
     # perform operations
     if request.method == 'GET':
@@ -248,19 +250,11 @@ def all_expenses(request, user: str):
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @find_user
+@validate_token
 def specific_expense(request, user: str, expense: int):
     # validate token
-    try:
-        token = request.data['token']
-
-    except KeyError as key_e:
-        token = request.query_params.get('token') # for GET method token must be provided within query params
-
-        if token is None:
-            return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
-
-    if request.user_obj.token != hash_text(token):
-        return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+    if request.user_obj.token != hash_text(request.token):
+        return Response({'error': f"Token '{request.token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
 
     try:    
         expense_obj = Expense.objects.filter(id=expense).first()
