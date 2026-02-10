@@ -5,8 +5,8 @@ from rest_framework import status as st
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError
 
-from DB.models import User
-from Views.serializers import UserSerializer
+from DB.models import User, Expense
+from Views.serializers import UserSerializer, ExpenseSerializer, ExpenseBulkSerializer
 
 from Views.hash import hash_table, CHARACTERS
 import random
@@ -167,7 +167,43 @@ def specific_user(request, user: str):
 
 @api_view(['GET', 'POST'])
 def all_expenses(request, user: str):
-    pass
+    # find user
+    try:
+        user_obj = User.objects.filter(username=user).first()
+        if user_obj is None:
+            return Response({'error', f"Username '{user}' not found"}, st.HTTP_404_NOT_FOUND)
+        
+    except DatabaseError as db_e:
+        return db_error(db_e)
+
+    # validate token
+    try:
+        token = request.data['token']
+
+    except KeyError as key_e:
+        token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters
+                                                  # otherwise it can be placed within request body
+        if token is None:
+            return Response({'error': f'User token was not provided: {key_e}'}, st.HTTP_400_BAD_REQUEST)
+
+    if user_obj.token != hash_text(token):
+        return Response({'error': f"Token '{token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+    
+    # perform operations
+    if request.method == 'GET':
+        try:
+            expenses = Expense.objects.all()
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+        
+        else:
+            serializer = ExpenseBulkSerializer(expenses, many=True)
+            return Response(serializer.data, st.HTTP_200_OK)
+        
+    else:
+        pass
+
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def specific_expense(request, user: str, expense: int):

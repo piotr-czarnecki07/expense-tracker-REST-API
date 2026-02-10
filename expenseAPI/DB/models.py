@@ -11,3 +11,11 @@ class User(models.Model):
     token = models.CharField(max_length=50, null=False, unique=True) # a token that allows to perform operations on user's expenses list, hashed in the database
 
     created_at = models.DateField(auto_now_add=True)
+
+class Expense(models.Model):
+    title = models.CharField(max_length=50, null=False)
+    amount = models.FloatField()
+    category = models.CharField(max_length=50, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
