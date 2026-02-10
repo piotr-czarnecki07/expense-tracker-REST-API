@@ -266,10 +266,57 @@ def specific_expense(request, user: str, expense: int):
         return Response(serializer.data, st.HTTP_200_OK)
 
     elif request.method == 'PUT':
-        pass
+        try:
+            expense_obj.title = request.data['title']
+            expense_obj.amount = float(request.data['amount'])
+            expense_obj.category = request.data['category']
+            expense_obj.save()
+
+        except KeyError as key_e:
+            return Response({'error': f'Parameter {key_e} was not provided'}, st.HTTP_400_BAD_REQUEST)
+
+        except ValueError as v_e:
+            return Response({'error': f"Parameter 'amount' is of wrong type: {v_e}"}, st.HTTP_400_BAD_REQUEST)
+
+        except ValidationError as val_e:
+            return Response({'error': f'Expense data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+        
+        else:
+            serializer = ExpenseSerializer(expense_obj)
+            return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     elif request.method == 'PATCH':
-        pass
+        try:
+            title = request.data.get('title')
+            amount = float(request.data.get('amount'))
+            category = request.data.get('category')
+
+            if title is not None:
+                expense_obj.title = title
+
+            if amount is not None:
+                expense_obj.amount = amount
+
+            if category is not None:
+                expense_obj.category = category
+
+            expense_obj.save()
+
+        except ValueError as v_e:
+            return Response({'error': f"Parameter 'amount' is of wrong type: {v_e}"}, st.HTTP_400_BAD_REQUEST)
+
+        except ValidationError as val_e:
+            return Response({'error': f'Expense data is invalid, {val_e}'}, st.HTTP_400_BAD_REQUEST)
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+        
+        else:
+            serializer = ExpenseSerializer(expense_obj)
+            return Response(serializer.data, st.HTTP_205_RESET_CONTENT)
 
     else: # DELETE
         pass
