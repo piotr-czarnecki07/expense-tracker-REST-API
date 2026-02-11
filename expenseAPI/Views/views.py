@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from DB.models import User, Expense
 from Views.serializers import UserSerializer, UserBulkSerializer, ExpenseSerializer, ExpenseBulkSerializer
 
-from Views.hash import hash_table, CHARACTERS
+from Views.hash import hash_table, dehash_table, CHARACTERS
 
 from functools import wraps
 import random
@@ -57,7 +57,7 @@ def get_token(view):
             token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters
                                                       # otherwise it can be placed within request body
             if token is None:
-                return Response({'error': 'User token was not provided'}, st.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'User token was not provided'}, st.HTTP_403_FORBIDDEN)
 
         request.token = token
 
@@ -337,7 +337,20 @@ def specific_expense(request, user: str, expense: int):
         else:
             return Response(serializer.data, st.HTTP_204_NO_CONTENT)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @find_user
-def get_token(request, user: str):
-    pass
+def token(request, user: str):
+    # validate password
+    password = request.query_params.get('password')
+    if password is None:
+        return Response({'error': 'Password was not provided'}, st.HTTP_403_FORBIDDEN)
+
+    if request.user_obj.password != hash_text(password):
+        return Response({'error': f"Password '{password}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+
+    if request.method == 'GET': # remind token
+        token = ''
+        for c in request.user_obj.token:
+            token += dehash_table[c]
+
+        return Response({'token': token}, st.HTTP_200_OK)
