@@ -19,6 +19,13 @@ def hash_text(text: str) -> str:
         hashed += hash_table[c]
     return hashed
 
+def generate_token() -> str:
+    token = ''
+    for _ in range(50):
+        token += CHARACTERS[random.randint(0, 38)]
+
+    return token
+
 # syntactic sugar functions
 def db_error(e):
     return Response({'error': f'Database is not available: {e}'}, st.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -101,9 +108,9 @@ def all_users(request):
         if '@' not in email or '.' not in email:
             return Response({'error': 'Email is invalid'}, st.HTTP_400_BAD_REQUEST)
 
-        token = ''
-        for _ in range(50):
-            token += CHARACTERS[random.randint(0, 38)]
+        token = generate_token()
+        while User.objects.filter(token=hash_text(token)).first() is not None:
+            token = generate_token()
 
         try:
             user = User(username=username, email=email, password=hash_text(password), token=hash_text(token))
@@ -354,3 +361,18 @@ def token(request, user: str):
             token += dehash_table[c]
 
         return Response({'token': token}, st.HTTP_200_OK)
+
+    else: # POST; regenerate token
+        token = generate_token()
+        while User.objects.filter(token=hash_text(token)).first() is not None:
+            token = generate_token()
+
+        try:
+            request.user_obj.token = hash_text(token)
+            request.user_obj.save()
+
+        except DatabaseError as db_e:
+            return db_error(db_e)
+        
+        else:
+            return Response({'new_token': token}, st.HTTP_205_RESET_CONTENT)
