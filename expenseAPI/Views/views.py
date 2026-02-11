@@ -39,24 +39,24 @@ def amount_type_error(e):
 # decorators
 def find_user(view):
     @wraps(view)
-    def wrapper(request, *args):
+    def wrapper(request, *args, **kwargs):
         try:
-            user_obj = User.objects.filter(username=args[0]).first()
+            user_obj = User.objects.filter(username=kwargs['user']).first()
             if user_obj is None:
-                return Response({'error': f"Username '{args[0]}' not found"}, st.HTTP_404_NOT_FOUND)
+                return Response({'error': f"Username '{kwargs['user']}' not found"}, st.HTTP_404_NOT_FOUND)
 
         except DatabaseError as db_e:
             return db_error(db_e)
 
         request.user_obj = user_obj
 
-        return view(request, *args)
+        return view(request, *args, **kwargs)
 
     return wrapper
 
 def get_token(view):
     @wraps(view)
-    def wrapper(request, *args):
+    def wrapper(request, *args, **kwargs):
         try:
             token = request.data['token']
 
@@ -68,7 +68,7 @@ def get_token(view):
 
         request.token = token
 
-        return view(request, *args)
+        return view(request, *args, **kwargs)
 
     return wrapper
 
