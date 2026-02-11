@@ -47,7 +47,7 @@ def find_user(view):
 
     return wrapper
 
-def validate_token(view):
+def get_token(view):
     @wraps(view)
     def wrapper(request, *args):
         try:
@@ -123,7 +123,7 @@ def all_users(request):
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @find_user
-@validate_token
+@get_token
 def specific_user(request, user: str):
     # validate token
     if request.user_obj.token != hash_text(request.token):
@@ -199,7 +199,7 @@ def specific_user(request, user: str):
 
 @api_view(['GET', 'POST'])
 @find_user
-@validate_token
+@get_token
 def all_expenses(request, user: str):
     # validate token
     if request.user_obj.token != hash_text(request.token):
@@ -250,7 +250,7 @@ def all_expenses(request, user: str):
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @find_user
-@validate_token
+@get_token
 def specific_expense(request, user: str, expense: int):
     # validate token
     if request.user_obj.token != hash_text(request.token):
@@ -336,3 +336,8 @@ def specific_expense(request, user: str, expense: int):
         
         else:
             return Response(serializer.data, st.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+@find_user
+def get_token(request, user: str):
+    pass
