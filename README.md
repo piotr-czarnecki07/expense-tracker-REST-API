@@ -1,7 +1,7 @@
 # expense-tracker-REST-API
 
 REST API for managing a list of expenses.\
-Uses JWT for authenticating users.\
+Uses tokens for authenticating users.\
 Passwords and tokens are hashed before being stored in the database.
 
 ## Table of Contents
