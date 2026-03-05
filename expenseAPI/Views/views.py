@@ -11,6 +11,7 @@ from Views.serializers import UserSerializer, UserBulkSerializer, ExpenseSeriali
 from Views.hash import hash_table, dehash_table, CHARACTERS
 
 from functools import wraps
+from datetime import datetime, timedelta
 import random
 
 def hash_text(text: str) -> str:
@@ -61,8 +62,8 @@ def get_token(view):
             token = request.data['token']
 
         except KeyError:
-            token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters
-                                                      # otherwise it can be placed within request body
+            token = request.query_params.get('token') # for GET and DELETE methods, token must be in query parameters otherwise it can be placed within request body
+
             if token is None:
                 return Response({'error': 'User token was not provided'}, st.HTTP_403_FORBIDDEN)
 
@@ -112,8 +113,10 @@ def all_users(request):
         while User.objects.filter(token=hash_text(token)).first() is not None:
             token = generate_token()
 
+        token_exp = str(datetime.now() + timedelta(minutes=5))
+
         try:
-            user = User(username=username, email=email, password=hash_text(password), token=hash_text(token))
+            user = User(username=username, email=email, password=hash_text(password), token=hash_text(token), token_exp=token_exp)
             user.save()
 
         except KeyError:
@@ -126,15 +129,18 @@ def all_users(request):
             return db_error(db_e)
         
         else:
-            return Response({'token': token}, st.HTTP_201_CREATED)
+            return Response({'token': token, 'token_exp': token_exp}, st.HTTP_201_CREATED)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@find_user
 @get_token
+@find_user
 def specific_user(request, user: str):
     # validate token
     if request.user_obj.token != hash_text(request.token):
         return Response({'error': f"Token '{request.token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+    
+    if datetime.strptime(request.user_obj.token_exp, "%Y-%m-%d %H:%M:%S.%f") < datetime.now():
+        return Response({'info': 'Token is expired'}, status=st.HTTP_401_UNAUTHORIZED)
 
     # perform operations
     if request.method == 'GET':
@@ -205,12 +211,15 @@ def specific_user(request, user: str):
             return Response(serializer.data, st.HTTP_204_NO_CONTENT)
 
 @api_view(['GET', 'POST'])
-@find_user
 @get_token
+@find_user
 def all_expenses(request, user: str):
     # validate token
     if request.user_obj.token != hash_text(request.token):
         return Response({'error': f"Token '{request.token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+    
+    if datetime.strptime(request.user_obj.token_exp, "%Y-%m-%d %H:%M:%S.%f") < datetime.now():
+        return Response({'info': 'Token is expired'}, status=st.HTTP_401_UNAUTHORIZED)
 
     # perform operations
     if request.method == 'GET':
@@ -256,9 +265,16 @@ def all_expenses(request, user: str):
             return Response(serializer.data, st.HTTP_201_CREATED)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@find_user
 @get_token
+@find_user
 def specific_expense(request, user: str, expense: int):
+    # validate token
+    if request.user_obj.token != hash_text(request.token):
+        return Response({'error': f"Token '{request.token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
+    
+    if datetime.strptime(request.user_obj.token_exp, "%Y-%m-%d %H:%M:%S.%f") < datetime.now():
+        return Response({'info': 'Token is expired'}, status=st.HTTP_401_UNAUTHORIZED)
+
     # validate token
     if request.user_obj.token != hash_text(request.token):
         return Response({'error': f"Token '{request.token}' is invalid"}, st.HTTP_401_UNAUTHORIZED)
@@ -360,19 +376,22 @@ def token(request, user: str):
         for c in request.user_obj.token:
             token += dehash_table[c]
 
-        return Response({'token': token}, st.HTTP_200_OK)
+        return Response({'token': token, 'token_exp': request.user_obj.token_exp}, st.HTTP_200_OK)
 
     else: # POST; regenerate token
         token = generate_token()
         while User.objects.filter(token=hash_text(token)).first() is not None:
             token = generate_token()
 
+        token_exp = str(datetime.now() + timedelta(minutes=5))
+
         try:
             request.user_obj.token = hash_text(token)
+            request.user_obj.token_exp = token_exp
             request.user_obj.save()
 
         except DatabaseError as db_e:
             return db_error(db_e)
         
         else:
-            return Response({'new_token': token}, st.HTTP_205_RESET_CONTENT)
+            return Response({'new_token': token, 'new_token_exp': token_exp}, st.HTTP_205_RESET_CONTENT)

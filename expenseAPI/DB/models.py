@@ -9,6 +9,7 @@ class User(models.Model):
     expense_ids = models.JSONField(default=list) # list of user's expenses
 
     token = models.CharField(max_length=50, null=False, unique=True) # a token that allows to perform operations on user's expenses list, hashed in the database
+    token_exp = models.CharField(null=False) # datetime when token expires (5 minutes after creation)
 
     created_at = models.DateField(auto_now_add=True)
 

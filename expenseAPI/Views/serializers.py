@@ -4,7 +4,7 @@ from DB.models import User, Expense
 class UserSerializer(ModelSerializer):
     class Meta:
         model = User
-        fields = ['username', 'email', 'created_at', 'expense_ids']
+        fields = ['username', 'email', 'created_at', 'expense_ids', 'token_exp']
 
 class UserBulkSerializer(ModelSerializer):
     class Meta:
